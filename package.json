@@ -1,0 +1,29 @@
+{
+  "name": "google-ads-mcp",
+  "version": "1.0.0",
+  "description": "Google Ads MCP server for Claude Desktop",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "auth": "ts-node src/auth-setup.ts",
+    "test": "npm run build && node test/session-isolation.mjs && node test/rate-limit.mjs && node test/audit-and-identity.mjs && node test/http-session-routing.mjs && node test/firestore-stores.mjs && node test/oauth-signin.mjs && node test/developer-token.mjs",
+    "start:http": "node dist/http.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@google-cloud/firestore": "^9.2.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "dotenv": "^16.0.0",
+    "express": "^5.2.1",
+    "google-ads-api": "^23.0.0",
+    "zod": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.4.0",
+    "ts-node": "^10.0.0",
+    "typescript": "^7.0.2"
+  }
+}

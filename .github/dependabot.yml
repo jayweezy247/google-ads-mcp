@@ -1,0 +1,15 @@
+# Dependency updates. Monthly rather than weekly, matching my other repos —
+# this is a two-person team and a noisy bot gets ignored, which is worse than
+# no bot. Grouped so a month's patches arrive as one PR, not fifteen.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch

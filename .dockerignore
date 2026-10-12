@@ -1,0 +1,17 @@
+# Anything not needed to build. The credential entries are not housekeeping:
+# a .env copied into a layer is recoverable from the image by anyone who can
+# pull it, so they are excluded explicitly rather than by omission.
+.env
+.env.*
+!.env.example
+
+node_modules
+dist
+.git
+.github
+test
+*.md
+!README.md
+.DS_Store
+*.bak
+*.log

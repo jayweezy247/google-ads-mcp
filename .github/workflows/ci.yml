@@ -1,0 +1,118 @@
+# CI for the Google Ads MCP.
+#
+# This repo had none until now, which is why a broken build or a regression in
+# the write-safety controls could only be caught by someone running npm test by
+# hand. The tests this runs are the acceptance criteria for the Cloud Run
+# migration: session isolation, enforceable write caps, attributable writes.
+#
+# No credentials are needed or provided. Every test uses dummy env values and
+# makes no network call, deliberately — a test suite that needs the MCC to run
+# is a suite that stops running.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  # A newer push to the same branch supersedes an in-flight run rather than
+  # queueing behind it. CI minutes on a private repo are metered.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      # `npm ci` over `npm install`: it installs exactly the lockfile and fails
+      # on drift, which is the same guarantee the Docker build relies on.
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Test
+        run: npm test
+
+  docker:
+    # The image is what actually ships, so a Dockerfile that does not build is
+    # a broken PR even when the tests pass. Build only — nothing is pushed, and
+    # this workflow holds no registry credentials.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t google-ads-mcp:ci .
+
+      - name: Boots in shared mode and serves /health
+        # Before the Firestore stores existed (plan step 0a), this step asserted
+        # the opposite: that the container REFUSED to start in shared mode,
+        # because the gate had nothing deployment-grade to run with. Now that
+        # shared mode wires the real stores, booting is the correct behaviour
+        # and refusing would be the regression.
+        #
+        # The gate itself is still covered — test/audit-and-identity.mjs asserts
+        # it throws, naming every fault, when the stores are not deployment-grade.
+        # This step covers what a unit test cannot: that the built image actually
+        # runs and serves traffic.
+        #
+        # No GCP credentials are needed. The Firestore client is constructed
+        # lazily and contacts nothing until a request needs it, so /health --
+        # which by design needs no session and no credential -- answers without
+        # ever reaching Google.
+        run: |
+          set -e
+          docker run -d --name mcp-ci -p 8080:8080 \
+            -e GOOGLE_ADS_CLIENT_ID=test \
+            -e GOOGLE_ADS_CLIENT_SECRET=test \
+            -e PUBLIC_URL=https://ci.example.run.app \
+            -e OAUTH_SIGNING_KEY=ci-placeholder-signing-key-0123456789abcdef \
+            -e GOOGLE_ADS_CUSTOMER_ID=1111111111 \
+            -e GOOGLE_ADS_LOGIN_CUSTOMER_ID=1234567890 \
+            -e GOOGLE_CLOUD_PROJECT=ci-placeholder \
+            google-ads-mcp:ci
+
+          for i in $(seq 1 20); do
+            if curl -fsS http://localhost:8080/health >/tmp/health.json 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+          echo "--- container logs ---"
+          docker logs mcp-ci
+          echo "--- /health ---"
+          cat /tmp/health.json || true
+          echo
+
+          # A container that exited is a failure even if the curl loop timed out
+          # quietly -- check it explicitly rather than inferring from silence.
+          if [ "$(docker inspect -f '{{.State.Running}}' mcp-ci)" != "true" ]; then
+            echo "::error::Container is not running. It exited instead of serving."
+            docker rm -f mcp-ci >/dev/null 2>&1 || true
+            exit 1
+          fi
+
+          grep -q '"ok":true' /tmp/health.json || {
+            echo "::error::/health did not report ok."
+            docker rm -f mcp-ci >/dev/null 2>&1 || true
+            exit 1
+          }
+
+          docker rm -f mcp-ci >/dev/null
+          echo "Image boots in shared mode and serves /health."
