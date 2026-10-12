@@ -13,16 +13,16 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@google-cloud/firestore": "^9.2.0",
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@google-cloud/firestore": "^9.3.1",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "dotenv": "^16.0.0",
-    "express": "^5.2.1",
+    "express": "^5.3.0",
     "google-ads-api": "^23.0.0",
     "zod": "^3.0.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
-    "@types/node": "^26.4.0",
+    "@types/node": "^26.6.4",
     "ts-node": "^10.0.0",
     "typescript": "^7.0.2"
   }
